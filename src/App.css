@@ -1,7 +1,28 @@
+/* Updated CSS */
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  margin: 0; /* Remove the margin to ensure full-width */
+}
+
+.container {
+  max-width: 800px; /* Adjust the max-width to your preference */
+  width: 100%; /* Ensure the container takes full width */
+  text-align: center;
+}
+
 #root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+h1 {
   text-align: center;
 }
 
@@ -10,10 +31,13 @@
   padding: 1.5em;
   will-change: filter;
   transition: filter 300ms;
+  margin-bottom: 2em; /* Add margin at the bottom to create space between title and content */
 }
+
 .logo:hover {
   filter: drop-shadow(0 0 2em #646cffaa);
 }
+
 .logo.react:hover {
   filter: drop-shadow(0 0 2em #61dafbaa);
 }
@@ -40,3 +64,5 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Rest of your existing styles... */
