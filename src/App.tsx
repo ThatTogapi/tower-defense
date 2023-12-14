@@ -16,7 +16,7 @@ interface AppState {
   towers: Tower[];
   monsters: Monster[];
   monsterPath: MonsterPath;
-  shots: Shot[]; // Updated to include shots
+  shots: Shot[];
 }
 
 const towerTypes = ['Regular', 'Ice', 'Fire'];
@@ -94,7 +94,7 @@ function App() {
         tower.draw(context);
         tower.update();
       });
-  
+
       // Create monsters periodically based on nextWaveStart status
       if (state.gameStarted && state.nextWaveStart === 0) {
         initializeMonster();
@@ -108,25 +108,25 @@ function App() {
           nextWaveStart: prevState.nextWaveStart - 1,
         }));
       }
-  
+
       // Display monsters
       state.monsters.forEach((monster, index) => {
         monster.update();
         monster.display(context, tileSize);
-  
+
         // Check if the monster reaches the end of the path
         if (monster.pathIndex === state.monsterPath.straightLinePositions.length - 1) {
           // Remove the monster from the monsters array
           const updatedMonsters = [...state.monsters];
           updatedMonsters.splice(index, 1);
-  
+
           // Reduce player lives
           setState((prevState) => ({
             ...prevState,
             monsters: updatedMonsters,
             playerLives: prevState.playerLives - 1,
           }));
-  
+
           // Check if the player has no lives left
           if (state.playerLives - 1 === 0) {
             // Game over, reset the game
@@ -140,10 +140,11 @@ function App() {
           }
         }
       });
-  
+
       state.towers.forEach((tower) => {
         tower.draw(context);
         tower.update();
+        // console.log(tower.position);
 
         // Shoot at monsters
         state.monsters.forEach((monster) => {
@@ -160,46 +161,26 @@ function App() {
                   shots: [...(prevState.shots || []), newShot],
                 }));
               }
+              // Draw shots as tiny lines
+              state.shots.forEach((shot) => {
+                context.strokeStyle = shot.color;
+                context.beginPath();
+                context.moveTo(shot.position.x * tileSize, shot.position.y * tileSize);
+                context.lineTo(shot.goal.position.x * tileSize, shot.goal.position.y * tileSize);
+                context.stroke();
+              });
             }
+          }else if (monster.health <= 0) {
+            // Remove the monster from the monsters array
+            const updatedMonsters = [...state.monsters];
+            updatedMonsters.splice(1);
+            setState((prevState) => ({
+             ...prevState,
+              monsters: updatedMonsters,
+            }));
           }
         });
       });
-
-  
-      // Inside the mainLoop function, after creating shots
-      (state.shots || []).forEach((shot, shotIndex) => {
-        const dx = shot.goal.position.x - shot.position.x;
-        const dy = shot.goal.position.y - shot.position.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        const speed = 2; // Adjust the shot speed as needed
-  
-        // Check if the shot reaches the monster
-        const thresholdDistance = 1; // Adjust the threshold distance as needed
-        if (distance < thresholdDistance) {
-          // Reduce monster health
-          shot.goal.reduceHealth(30); // Adjust the damage amount as needed
-  
-          // Delete the shot
-          setState((prevState) => ({
-            ...prevState,
-            shots: prevState.shots.filter((_, index) => index !== shotIndex),
-          }));
-        } else {
-          // Move the shot towards the monster
-          shot.position.x += (dx / distance) * speed;
-          shot.position.y += (dy / distance) * speed;
-  
-          // Render the shot
-          context.fillStyle = shot.color;
-          context.fillRect(
-            shot.position.x * tileSize,
-            shot.position.y * tileSize,
-            fieldSize,
-            fieldSize
-          );
-        }
-      });
-  
       // Move the requestAnimationFrame outside the loop to ensure continuous updates
       requestAnimationFrame(mainLoop);
     }
@@ -332,4 +313,5 @@ const getButtonTextColor = (option: string): string => {
       return 'black';
   }
 };
+
 export default App;

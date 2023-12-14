@@ -59,6 +59,8 @@ class Monster {
     );
   }
 
+  onDefeat: (() => void) | null = null;
+  
   reduceHealth(damage: number) {
     this.health -= damage;
 
@@ -69,6 +71,11 @@ class Monster {
 
       // Remove the monster from the list of monsters
       this.monstersList.splice(this.monstersList.indexOf(this), 1);
+
+      // Trigger an update to refresh the game loop
+      if (this.onDefeat) {
+        this.onDefeat();
+      }
     }
   }
 }
