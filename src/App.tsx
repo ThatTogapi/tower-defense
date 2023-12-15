@@ -5,6 +5,7 @@ import MonsterPath from './MonsterPath';
 import Monster from './Monster';
 import { Tower } from './Tower';
 import Shot from './Shot';
+import { useForceUpdate } from './useForceUpdate';
 
 interface AppState {
   gameStarted: boolean;
@@ -26,6 +27,7 @@ export const fieldSize = 30;
 function App() {
   const tileSize = 30;
   const startingPlayerLives = 3; // Adjust as needed
+  const forceUpdate = useForceUpdate();
   const [state, setState] = useState<AppState>({
     gameStarted: false,
     gold: 10000,
@@ -94,13 +96,33 @@ function App() {
         tower.draw(context);
         tower.update();
       });
-  
-      // Create monsters periodically based on nextWaveStart status
-      if (state.gameStarted && state.nextWaveStart === 0) {
-        initializeMonster();
+
+      const isWaveFinished = state.monsters.length === 0;
+
+      if (state.gameStarted && (state.nextWaveStart === 0 || isWaveFinished)) {
+        if (isWaveFinished) {
+          // If the wave is finished, reset the timer and start a new wave
+          setState((prevState) => ({
+            ...prevState,
+            nextWaveStart: framesPerSecond * 5,
+            currentLevel: prevState.currentLevel + 1,
+          }));
+        } else {
+          // If the timer reaches 0 but there are still monsters, reset it
+          setState((prevState) => ({
+            ...prevState,
+            nextWaveStart: framesPerSecond * 5,
+          }));
+        }
+
+        // Add new monsters for the next wave
+        const newMonsters = Array.from({ length: state.currentLevel * 2 }, () => {
+          return new Monster({ x: 1, y: -1 }, state.monsterPath, state.monsters);
+        });
+
         setState((prevState) => ({
           ...prevState,
-          nextWaveStart: framesPerSecond * 5, // Reset nextWaveStart to 5 seconds
+          monsters: [...prevState.monsters, ...newMonsters],
         }));
       } else if (state.gameStarted) {
         setState((prevState) => ({
@@ -109,27 +131,34 @@ function App() {
         }));
       }
   
-      // Display monsters
+      if (state.gameStarted && state.nextWaveStart === 0) {
+        initializeMonster();
+        setState((prevState) => ({
+          ...prevState,
+          nextWaveStart: framesPerSecond * 5,
+        }));
+      } else if (state.gameStarted) {
+        setState((prevState) => ({
+          ...prevState,
+          nextWaveStart: prevState.nextWaveStart - 1,
+        }));
+      }
+  
       state.monsters.forEach((monster, index) => {
         monster.update();
         monster.display(context, tileSize);
   
-        // Check if the monster reaches the end of the path
         if (monster.pathIndex === state.monsterPath.straightLinePositions.length - 1) {
-          // Remove the monster from the monsters array
           const updatedMonsters = [...state.monsters];
           updatedMonsters.splice(index, 1);
   
-          // Reduce player lives
           setState((prevState) => ({
             ...prevState,
             monsters: updatedMonsters,
             playerLives: prevState.playerLives - 1,
           }));
   
-          // Check if the player has no lives left
           if (state.playerLives - 1 === 0) {
-            // Game over, reset the game
             setState((prevState) => ({
               ...prevState,
               gameStarted: false,
@@ -144,14 +173,12 @@ function App() {
       state.towers.forEach((tower) => {
         tower.draw(context);
         tower.update();
-
-        // Shoot at monsters
+  
         state.monsters.forEach((monster) => {
-          // Check if the monster is still alive
           if (monster.health > 0) {
             const distance = calculateDistance(tower.position, monster.position);
             const thresholdDistance = 10;
-
+  
             if (distance < thresholdDistance) {
               const newShot = tower.shoot(monster);
               if (newShot) {
@@ -164,47 +191,52 @@ function App() {
           }
         });
       });
-
   
-      // Inside the mainLoop function, after creating shots
       (state.shots || []).forEach((shot, shotIndex) => {
         const dx = shot.goal.position.x - shot.position.x;
         const dy = shot.goal.position.y - shot.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const speed = 2; // Adjust the shot speed as needed
-  
-        // Check if the shot reaches the monster
-        const thresholdDistance = 1; // Adjust the threshold distance as needed
+        const speed = 2;
+      
+        // Update shot position
+        shot.position.x += (dx / distance) * speed;
+        shot.position.y += (dy / distance) * speed;
+      
+        // Draw the shot
+        context.strokeStyle = shot.color;
+        context.beginPath();
+        context.moveTo(shot.goal.position.x * tileSize, shot.goal.position.y * tileSize);
+        context.lineTo(shot.position.x * tileSize, shot.position.y * tileSize);
+        context.stroke();
+      
+        // Check if the shot reached the target
+        const thresholdDistance = 1;
         if (distance < thresholdDistance) {
-          // Reduce monster health
-          shot.goal.reduceHealth(30); // Adjust the damage amount as needed
-  
-          // Delete the shot
-          setState((prevState) => ({
-            ...prevState,
-            shots: prevState.shots.filter((_, index) => index !== shotIndex),
-          }));
-        } else {
-          // Move the shot towards the monster
-          shot.position.x += (dx / distance) * speed;
-          shot.position.y += (dy / distance) * speed;
-  
-          // Render the shot
-          context.fillStyle = shot.color;
-          context.fillRect(
-            shot.position.x * tileSize,
-            shot.position.y * tileSize,
-            fieldSize,
-            fieldSize
-          );
+          // Reduce the health of the target monster
+          shot.goal.reduceHealth(10);
+      
+          // Remove the shot only if it reached the target monster
+          if (shot.goal.health <= 0) {
+            setState((prevState) => ({
+              ...prevState,
+              shots: prevState.shots.filter((_, index) => index !== shotIndex),
+            }));
+          }
         }
-      });
-  
-      // Move the requestAnimationFrame outside the loop to ensure continuous updates
-      requestAnimationFrame(mainLoop);
+      });      
     }
   };
   
+  // Use requestAnimationFrame to start the loop
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      requestAnimationFrame(mainLoop);
+    }, 1000 / framesPerSecond);
+
+    // Clear the interval when the component is unmounted
+    return () => clearInterval(intervalId);
+  }, [state.towers, state.monsters, forceUpdate]);
+
 
   const handleTowerTypeSelect = (towerType: 'Regular' | 'Ice' | 'Fire' | null) => {
     setState((prevState) => ({ ...prevState, selectedTower: towerType }));
@@ -241,9 +273,10 @@ function App() {
     setState((prevState) => ({ ...prevState, gameStarted: true }));
   };
 
-  useEffect(() => {
-    mainLoop();
-  }, [state.towers, state.monsters]);
+  // useEffect(() => {
+  //   mainLoop();
+  // }, [state.towers, state.monsters, forceUpdate]);
+
 
   return (
     <div className="container">
