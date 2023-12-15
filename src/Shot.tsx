@@ -1,4 +1,3 @@
-// Shot.ts
 import { getButtonColor } from './App';
 import Monster from './Monster';
 

@@ -1,4 +1,3 @@
-// Monster.ts
 import MonsterPath from "./MonsterPath";
 
 class Monster {
@@ -14,6 +13,35 @@ class Monster {
     this.position = startPosition;
     this.path = path;
     this.monstersList = monstersList;
+  }
+
+  freeze(durationInSeconds: number) {
+    // Skip freezing if the monster is already defeated
+    if (this.isDefeated) {
+      return;
+    }
+
+    // Temporarily set the speed to 0
+    const originalSpeed = this.speed;
+    this.speed = 0;
+
+    // After the specified duration, restore the original speed
+    setTimeout(() => {
+      this.speed = originalSpeed;
+    }, durationInSeconds * 1000); // Convert seconds to milliseconds
+  }
+
+  burn(durationInSeconds: number): void {
+    if (this.isDefeated) {
+      return;
+    }
+    // Reduce health over time for the duration of the burn
+    const burnInterval = setInterval(() => {
+      this.health -= 2; // Adjust the burn damage as needed
+      if (this.health <= 0) {
+        clearInterval(burnInterval); // Stop the burn effect if the monster is defeated
+      }
+    }, durationInSeconds * 1000); // Assuming a burn tick every second, adjust as needed
   }
 
   update() {

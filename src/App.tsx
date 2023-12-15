@@ -1,5 +1,3 @@
-// App.tsx
-
 import React, { useState, useEffect } from 'react';
 import MonsterPath from './MonsterPath';
 import Monster from './Monster';
@@ -14,27 +12,31 @@ interface AppState {
   nextWaveStart: number;
   currentLevel: number;
   playerLives: number;
+  kills: number;
+  playerLifeCost: number;
   towers: Tower[];
   monsters: Monster[];
   monsterPath: MonsterPath;
-  shots: Shot[]; // Updated to include shots
+  shots: Shot[];
 }
 
 const towerTypes = ['Regular', 'Ice', 'Fire'];
-const framesPerSecond = 60; // Adjust as needed
+const framesPerSecond = 60;
 export const fieldSize = 30;
 
 function App() {
   const tileSize = 30;
-  const startingPlayerLives = 3; // Adjust as needed
+  const startingPlayerLives = 3;
   const forceUpdate = useForceUpdate();
   const [state, setState] = useState<AppState>({
     gameStarted: false,
-    gold: 10000,
+    gold: 100,
     selectedTower: null,
-    nextWaveStart: framesPerSecond * 5, // 5 seconds in frames
+    nextWaveStart: framesPerSecond * 5,
     currentLevel: 1,
     playerLives: startingPlayerLives,
+    kills: 0,
+    playerLifeCost: 100,
     towers: [],
     monsters: [],
     monsterPath: new MonsterPath([
@@ -61,13 +63,15 @@ function App() {
     shots: [],
   });
 
-  const initializeMonster = () => {
-    const newMonster = new Monster({ x: 1, y: -1 }, state.monsterPath, state.monsters);
+  const initializeMonster = (index: number) => {
+    const startPosition = { x: 1, y: -1 - index }; // Adjust the starting position
+    const newMonster = new Monster(startPosition, state.monsterPath, state.monsters);
     setState((prevState) => ({
       ...prevState,
       monsters: [...prevState.monsters, newMonster],
     }));
   };
+  
 
   const calculateDistance = (point1: { x: number; y: number }, point2: { x: number; y: number }) => {
     const dx = point1.x - point2.x;
@@ -77,21 +81,23 @@ function App() {
 
   useEffect(() => {
     if (state.gameStarted) {
-      initializeMonster();
+      for (let i = 0; i < state.currentLevel * 2; i++) {
+        initializeMonster(i);
+      }
     }
   }, [state.gameStarted]);
 
   const mainLoop = () => {
     const canvas = document.getElementById('gameCanvas') as HTMLCanvasElement;
     const context = canvas.getContext('2d');
-  
+
     if (context) {
       context.clearRect(0, 0, canvas.width, canvas.height);
       context.fillStyle = 'lightgreen';
       context.fillRect(0, 0, canvas.width, canvas.height);
-  
+
       state.monsterPath.draw(context, tileSize);
-  
+
       state.towers.forEach((tower) => {
         tower.draw(context);
         tower.update();
@@ -101,21 +107,18 @@ function App() {
 
       if (state.gameStarted && (state.nextWaveStart === 0 || isWaveFinished)) {
         if (isWaveFinished) {
-          // If the wave is finished, reset the timer and start a new wave
           setState((prevState) => ({
             ...prevState,
             nextWaveStart: framesPerSecond * 5,
             currentLevel: prevState.currentLevel + 1,
           }));
         } else {
-          // If the timer reaches 0 but there are still monsters, reset it
           setState((prevState) => ({
             ...prevState,
             nextWaveStart: framesPerSecond * 5,
           }));
         }
 
-        // Add new monsters for the next wave
         const newMonsters = Array.from({ length: state.currentLevel * 2 }, () => {
           return new Monster({ x: 1, y: -1 }, state.monsterPath, state.monsters);
         });
@@ -130,9 +133,9 @@ function App() {
           nextWaveStart: prevState.nextWaveStart - 1,
         }));
       }
-  
+
       if (state.gameStarted && state.nextWaveStart === 0) {
-        initializeMonster();
+        initializeMonster(state.currentLevel);
         setState((prevState) => ({
           ...prevState,
           nextWaveStart: framesPerSecond * 5,
@@ -143,42 +146,45 @@ function App() {
           nextWaveStart: prevState.nextWaveStart - 1,
         }));
       }
-  
+
       state.monsters.forEach((monster, index) => {
         monster.update();
         monster.display(context, tileSize);
-  
+
         if (monster.pathIndex === state.monsterPath.straightLinePositions.length - 1) {
           const updatedMonsters = [...state.monsters];
           updatedMonsters.splice(index, 1);
-  
+
           setState((prevState) => ({
             ...prevState,
             monsters: updatedMonsters,
             playerLives: prevState.playerLives - 1,
           }));
-  
-          if (state.playerLives - 1 === 0) {
+
+          if (state.playerLives <= 0) {
             setState((prevState) => ({
               ...prevState,
               gameStarted: false,
               playerLives: startingPlayerLives,
+              gold: 100,
+              kills: 0,
+              currentLevel: 1,
               towers: [],
               monsters: [],
             }));
           }
         }
       });
-  
+
       state.towers.forEach((tower) => {
         tower.draw(context);
         tower.update();
-  
+
         state.monsters.forEach((monster) => {
           if (monster.health > 0) {
             const distance = calculateDistance(tower.position, monster.position);
             const thresholdDistance = 10;
-  
+
             if (distance < thresholdDistance) {
               const newShot = tower.shoot(monster);
               if (newShot) {
@@ -191,52 +197,65 @@ function App() {
           }
         });
       });
-  
+
       (state.shots || []).forEach((shot, shotIndex) => {
         const dx = shot.goal.position.x - shot.position.x;
         const dy = shot.goal.position.y - shot.position.y;
         const distance = Math.sqrt(dx * dx + dy * dy);
-        const speed = 2;
-      
-        // Update shot position
+        const speed = 0.5;
+
         shot.position.x += (dx / distance) * speed;
         shot.position.y += (dy / distance) * speed;
-      
-        // Draw the shot
+        context.lineWidth = 10;
         context.strokeStyle = shot.color;
         context.beginPath();
         context.moveTo(shot.goal.position.x * tileSize, shot.goal.position.y * tileSize);
         context.lineTo(shot.position.x * tileSize, shot.position.y * tileSize);
         context.stroke();
-      
-        // Check if the shot reached the target
+
         const thresholdDistance = 1;
         if (distance < thresholdDistance) {
-          // Reduce the health of the target monster
-          shot.goal.reduceHealth(10);
-      
-          // Remove the shot only if it reached the target monster
+          // Apply effects based on tower type
+          switch (shot.type) {
+            case 'Regular':
+              shot.goal.reduceHealth(10);
+              break;
+            case 'Ice':
+              // Freeze the monster in position for some time (e.g., 3 seconds)
+              shot.goal.freeze(3);
+              shot.goal.reduceHealth(1); // Ice tower also deals damage
+              break;
+            case 'Fire':
+              shot.goal.reduceHealth(8); // Fire tower deals extra damage
+              shot.goal.burn(3);
+              break;
+            default:
+              break;
+          }
+
           if (shot.goal.health <= 0) {
             setState((prevState) => ({
               ...prevState,
+              kills: prevState.kills + 1,
+              gold: prevState.gold + 10,
               shots: prevState.shots.filter((_, index) => index !== shotIndex),
             }));
+            if(state.kills % 10 === 1){
+              state.currentLevel++;
+            }
           }
         }
-      });      
+      });
     }
   };
-  
-  // Use requestAnimationFrame to start the loop
+
   useEffect(() => {
     const intervalId = setInterval(() => {
       requestAnimationFrame(mainLoop);
     }, 1000 / framesPerSecond);
 
-    // Clear the interval when the component is unmounted
     return () => clearInterval(intervalId);
   }, [state.towers, state.monsters, forceUpdate]);
-
 
   const handleTowerTypeSelect = (towerType: 'Regular' | 'Ice' | 'Fire' | null) => {
     setState((prevState) => ({ ...prevState, selectedTower: towerType }));
@@ -245,38 +264,76 @@ function App() {
   const handleCanvasClick = (event: React.MouseEvent<HTMLCanvasElement>) => {
     const canvas = event.currentTarget;
     const rect = canvas.getBoundingClientRect();
-
+  
+    // Calculate the grid positions based on the mouse click coordinates
     const x = Math.floor((event.clientX - rect.left) / fieldSize) * fieldSize;
     const y = Math.floor((event.clientY - rect.top) / fieldSize) * fieldSize;
-
-    if (state.monsterPath.isWithinPath(x, y) === true) {
-      console.log('You cannot place a tower on the monster path.');
-      return;
-    }
-
-    if (state.towers.some((tower) => tower.position.x === x && tower.position.y === y)) {
-      console.log('There is already a tower on this position.');
-      return;
-    }
-
-    if (state.selectedTower && state.gold >= 50) {
-      const newTower = new Tower(state.selectedTower, { x, y });
-      setState((prevState) => ({
-        ...prevState,
-        towers: [...prevState.towers, newTower],
-        gold: prevState.gold - 50,
-      }));
+  
+    // Check if a tower can be placed at the specified position
+    if (
+      x >= 0 &&
+      x < canvas.width &&
+      y >= 0 &&
+      y < canvas.height &&
+      !state.monsterPath.isWithinPath(x, y) &&
+      state.towers.every(
+        (tower) =>
+          Math.abs(tower.position.x - x) > 0.1 || Math.abs(tower.position.y - y) > 0.1
+      )
+    ) {
+      // Check if a tower type is selected and if there is enough gold to place the tower
+      if (state.selectedTower && state.gold >= 50) {
+        // Create a new tower at the calculated position
+        const newTower = new Tower(state.selectedTower, { x, y });
+  
+        // Update the state to include the new tower and deduct the gold cost
+        setState((prevState) => ({
+          ...prevState,
+          towers: [...prevState.towers, newTower],
+          gold: prevState.gold - 50,
+        }));
+      }
     }
   };
+   
 
   const handleStartButtonClick = () => {
     setState((prevState) => ({ ...prevState, gameStarted: true }));
   };
 
-  // useEffect(() => {
-  //   mainLoop();
-  // }, [state.towers, state.monsters, forceUpdate]);
+  const handleBuyLifeButtonClick = () => {
+    if (state.gold >= state.playerLifeCost) {
+      setState((prevState) => ({
+        ...prevState,
+        gold: prevState.gold - state.playerLifeCost,
+        playerLives: prevState.playerLives + 1,
+      }));
+    } else {
+      console.log('Not enough gold to buy a player life.');
+    }
+  };
 
+  const handleKillAllMonsters = () => {
+    if (state.gold >= 1000) {
+      const updatedMonsters = state.monsters.map((monster) => {
+        const updatedMonster: Monster = new Monster(
+            monster.position,
+            monster.path,
+            monster.monstersList
+        );
+        updatedMonster.isDefeated = true;
+        return updatedMonster;
+      });
+
+      setState((prevState) => ({
+        ...prevState,
+        gold: prevState.gold - 1000,
+        monsters: updatedMonsters,
+      }));
+    } else {
+      console.log('Not enough gold to kill all monsters.');
+    }
+  };
 
   return (
     <div className="container">
@@ -299,6 +356,10 @@ function App() {
       <p>Next Wave Start: {Math.ceil(state.nextWaveStart / framesPerSecond)} seconds</p>
       <p>Current Level: {state.currentLevel}</p>
       <p>Player Lives: {state.playerLives}</p>
+
+      <button onClick={handleBuyLifeButtonClick}>Buy Life ({state.playerLifeCost} Gold)</button>
+      <button onClick={handleKillAllMonsters}>Kill All Monsters (1000 Gold)</button>
+
       <canvas
         id="gameCanvas"
         width={fieldSize * 20}
@@ -365,4 +426,5 @@ const getButtonTextColor = (option: string): string => {
       return 'black';
   }
 };
+
 export default App;

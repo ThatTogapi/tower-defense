@@ -1,4 +1,3 @@
-// Tower.ts
 import { getButtonColor, fieldSize } from './App';
 import Monster from './Monster';
 import Shot from './Shot'; // Import the Shot class
